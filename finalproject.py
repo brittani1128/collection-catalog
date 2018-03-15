@@ -2,39 +2,146 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from dbsetup import Base, Collection, CollectionItem
+
+# Imports for login step
+from flask import session as login_session
+import random
+import string
+
+# Imports for GConnect
+from oauth2client.client import flow_from_clientsecrets
+from oauth2client.client import FlowExchangeError
+import httplib2
+import json
+from flask import make_response
+import requests
+
+
 app = Flask(__name__)
 
 
+CLIENT_ID = json.loads(
+    open('client_secrets.json', 'r').read())['web']['client_id']
+APPLICATION_NAME = "Item Catalog Application"
+
+
+@app.route('/gconnect', methods=['POST'])
+def gconnect():
+    # Validate state token
+    if request.args.get('state') != login_session['state']:
+        response = make_response(json.dumps('Invalid state parameter.'), 401)
+        response.headers['Content-Type'] = 'application/json'
+        return response
+    # Obtain authorization code
+    code = request.data
+
+    try:
+        # Upgrade the authorization code into a credentials object
+        oauth_flow = flow_from_clientsecrets('client_secrets.json', scope='')
+        oauth_flow.redirect_uri = 'postmessage'
+        credentials = oauth_flow.step2_exchange(code)
+    except FlowExchangeError:
+        response = make_response(
+            json.dumps('Failed to upgrade the authorization code.'), 401)
+        response.headers['Content-Type'] = 'application/json'
+        return response
+
+    # Check that the access token is valid.
+    access_token = credentials.access_token
+    url = ('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=%s'
+           % access_token)
+    h = httplib2.Http()
+    result = json.loads(h.request(url, 'GET')[1])
+    # If there was an error in the access token info, abort.
+    if result.get('error') is not None:
+        response = make_response(json.dumps(result.get('error')), 500)
+        response.headers['Content-Type'] = 'application/json'
+        return response
+
+    # Verify that the access token is used for the intended user.
+    gplus_id = credentials.id_token['sub']
+    if result['user_id'] != gplus_id:
+        response = make_response(
+            json.dumps("Token's user ID doesn't match given user ID."), 401)
+        response.headers['Content-Type'] = 'application/json'
+        return response
+
+    # Verify that the access token is valid for this app.
+    if result['issued_to'] != CLIENT_ID:
+        response = make_response(
+            json.dumps("Token's client ID does not match app's."), 401)
+        print "Token's client ID does not match app's."
+        response.headers['Content-Type'] = 'application/json'
+        return response
+
+    stored_access_token = login_session.get('access_token')
+    stored_gplus_id = login_session.get('gplus_id')
+    if stored_access_token is not None and gplus_id == stored_gplus_id:
+        response = make_response(json.dumps('Current user is already connected.'),
+                                 200)
+        response.headers['Content-Type'] = 'application/json'
+        return response
+
+    # Store the access token in the session for later use.
+    login_session['access_token'] = credentials.access_token
+    login_session['gplus_id'] = gplus_id
+
+    # Get user info
+    userinfo_url = "https://www.googleapis.com/oauth2/v1/userinfo"
+    params = {'access_token': credentials.access_token, 'alt': 'json'}
+    answer = requests.get(userinfo_url, params=params)
+
+    data = answer.json()
+
+    login_session['username'] = data['name']
+    login_session['picture'] = data['picture']
+    login_session['email'] = data['email']
+
+    output = ''
+    output += '<h1>Welcome, '
+    output += login_session['username']
+    output += '!</h1>'
+    output += '<img src="'
+    output += login_session['picture']
+    output += ' " style = "width: 300px; height: 300px;border-radius: 150px;-webkit-border-radius: 150px;-moz-border-radius: 150px;"> '
+    flash("you are now logged in as %s" % login_session['username'])
+    print "done!"
+    return output
+
+
+# Connect to Database and create database session
 engine = create_engine('sqlite:///collectioncatalog.db')
 Base.metadata.bind = engine
 
 DBSession = sessionmaker(bind=engine)
 session = DBSession()
 
+# set the secret key.  keep this really secret:
+app.secret_key = 'A0Zr98j/3yX R~XHH!jmN]LWX/,?RT'
 
-# Fake Collections
-# collection = {'name': 'Collection1', 'id': '1'}
-
-# collections = [{'name': 'Collection1', 'id': '1'}, {'name':'Collection2', 'id':'2'},{'name':'Collection3', 'id':'3'}]
-
-
-# Fake Collection Items
-# items = [ {'name':'Cheese Pizza', 'description':'made with fresh cheese', 'price':'$5.99','course' :'Entree', 'id':'1'}, {'name':'Chocolate Cake','description':'made with Dutch Chocolate', 'price':'$3.99', 'course':'Dessert','id':'2'},{'name':'Caesar Salad', 'description':'with fresh organic vegetables','price':'$5.99', 'course':'Entree','id':'3'},{'name':'Iced Tea', 'description':'with lemon','price':'$.99', 'course':'Beverage','id':'4'},{'name':'Spinach Dip', 'description':'creamy dip with fresh spinach','price':'$1.99', 'course':'Appetizer','id':'5'} ]
-# item =  {'name':'Cheese Pizza','description':'made with fresh cheese','price':'$5.99','course' :'Entree'}
-# items = []
+# Create anti-forgery state token
+@app.route('/login')
+def showLogin():
+    state = ''.join(random.choice(string.ascii_uppercase + string.digits)
+                    for x in xrange(32))
+    login_session['state'] = state
+    # Render the login template
+    return render_template('login.html')
 
 
+# JSON APIs to view Collection Information
 @app.route('/collection/JSON')
 def collectionsJSON():
     collections = session.query(Collection).all()
     return jsonify(collections=[c.serialize for c in collections])
+
 
 @app.route('/collection/<int:collection_id>/items/JSON')
 def collectionItemsJSON(collection_id):
     collection = session.query(Collection).filter_by(id=collection_id).one()
     items = session.query(CollectionItem).filter_by(
         collection_id=collection_id).all()
-    return jsonify(CollectionItems=[i.serialize for i in items])                ###should this be CollectionItem to refer back to class in dbsetup?
+    return jsonify(CollectionItems=[i.serialize for i in items])
 
 
 @app.route('/collection/<int:collection_id>/items/<int:item_id>/JSON')
@@ -66,7 +173,6 @@ def newCollection():
 
 
 # Edit a collection
-
 @app.route('/collection/<int:collection_id>/edit/', methods=['GET', 'POST'])
 def editCollection(collection_id):
     editedCollection = session.query(
@@ -82,7 +188,6 @@ def editCollection(collection_id):
 
 
 # Delete a collection
-
 @app.route('/collection/<int:collection_id>/delete/', methods=['GET', 'POST'])
 def deleteCollection(collection_id):
     collectionToDelete = session.query(
@@ -99,7 +204,6 @@ def deleteCollection(collection_id):
 
 
 # Show collection items
-
 @app.route('/collection/<int:collection_id>/')
 @app.route('/collection/<int:collection_id>/items/')
 def showItems(collection_id):
@@ -112,7 +216,6 @@ def showItems(collection_id):
 
 
 # Create a new collection item
-
 @app.route(
     '/collection/<int:collection_id>/items/new/', methods=['GET', 'POST'])
 def newCollectionItem(collection_id):
@@ -134,11 +237,10 @@ def newCollectionItem(collection_id):
 
 
 # Edit a collection item
-
-@app.route('/collection/<int:collection_id>/items/<int:item>/edit',
+@app.route('/collection/<int:collection_id>/items/<int:item_id>/edit',
            methods=['GET', 'POST'])
 def editCollectionItem(collection_id, item_id):
-    editedCollectionItem = session.query(CollectionItem).filter_by(id=item).one()
+    editedCollectionItem = session.query(CollectionItem).filter_by(id=item_id).one()
     if request.method == 'POST':
         if request.form['name']:
             editedCollectionItem.name = request.form['name']
@@ -160,7 +262,6 @@ def editCollectionItem(collection_id, item_id):
 
 
 # Delete a collection item
-
 @app.route('/collection/<int:collection_id>/items/<int:item_id>/delete',
            methods=['GET', 'POST'])
 def deleteCollectionItem(collection_id, item_id):
@@ -170,8 +271,8 @@ def deleteCollectionItem(collection_id, item_id):
         session.commit()
         return redirect(url_for('showItems', collection_id=collection_id))
     else:
-        #return render_template('deleteCollectionItem.html', item=itemToDelete)
-        return "This page is for deleting menu item %s" % menu_id
+        return render_template('deleteCollectionItem.html', item=itemToDelete)
+        #return "This page is for deleting collefction item %s" % collection_id
 
 
 if __name__ == '__main__':
