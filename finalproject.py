@@ -194,7 +194,7 @@ def showCollections():
 # Create a new collection
 @app.route('/collection/new/', methods=['GET', 'POST'])
 def newCollection():
-    if 'username' not in login_session"
+    if 'username' not in login_session:
         return redirect('/login')
     if request.method == 'POST':
         newCollection = Collection(name=request.form['name'])
