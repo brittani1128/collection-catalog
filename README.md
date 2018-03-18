@@ -20,7 +20,7 @@ This project is a RESTful web application using the Flask framework which access
 
 #### Set Up
 
-1. Install Vagrant and virtualbox
+1. Install [Vagrant](https://www.vagrantup.com/downloads.html) and [virtualbox](https://www.virtualbox.org/wiki/Downloads)
 2. Download or clone from github [fullstack-nanodegree-vm](https://github.com/udacity/fullstack-nanodegree-vm)
 3. Download the [project files](https://github.com/brittani1128/collection-catalog)
 
