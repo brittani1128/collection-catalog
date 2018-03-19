@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from dbsetup import Base, Collection, CollectionItem
@@ -124,7 +124,11 @@ def gconnect():
     output += '!</h1>'
     output += '<img src="'
     output += login_session['picture']
-    output += ' " style = "width: 300px; height: 300px;border-radius: 150px;-webkit-border-radius: 150px;-moz-border-radius: 150px;"> '
+    output += ' " style = "width: 300px;'\
+              ' height: 300px;' \
+              'border-radius: 150px;'\
+              '-webkit-border-radius: 150px;'\
+              '-moz-border-radius: 150px;"> '
     flash("you are now logged in as %s" % login_session['username'])
     print "done!"
     return output
@@ -177,7 +181,7 @@ def collectionItemsJSON(collection_id):
 
 
 @app.route('/collection/<int:collection_id>/items/<int:item_id>/JSON')
-def ItemJSON(collection_id, item_id):
+def collectionItemJSON(collection_id, item_id):
     Collection_Item = session.query(Item).filter_by(id=item_id).one()
     return jsonify(Collection_Item=Collection_Item.serialize)
 
@@ -209,6 +213,8 @@ def newCollection():
 # Edit a collection
 @app.route('/collection/<int:collection_id>/edit/', methods=['GET', 'POST'])
 def editCollection(collection_id):
+    if 'username' not in login_session:
+        return redirect('/login')
     editedCollection = session.query(
         Collection).filter_by(id=collection_id).one()
     if request.method == 'POST':
@@ -224,6 +230,8 @@ def editCollection(collection_id):
 # Delete a collection
 @app.route('/collection/<int:collection_id>/delete/', methods=['GET', 'POST'])
 def deleteCollection(collection_id):
+    if 'username' not in login_session:
+        return redirect('/login')
     collectionToDelete = session.query(
         Collection).filter_by(id=collection_id).one()
     if request.method == 'POST':
@@ -253,6 +261,8 @@ def showItems(collection_id):
 @app.route(
     '/collection/<int:collection_id>/items/new/', methods=['GET', 'POST'])
 def newCollectionItem(collection_id):
+    if 'username' not in login_session:
+        return redirect('/login')
     if request.method == 'POST':
         newItem = CollectionItem(name=request.form['name'],
                                 description=request.form['description'],
@@ -264,9 +274,7 @@ def newCollectionItem(collection_id):
 
         return redirect(url_for('showItems', collection_id=collection_id))
     else:
-        return render_template('newCollectionItem.html',
-                                collection_id=collection_id)
-        return render_template('newCollectionItem.html', collection=collection) ## is this a duplicate??
+        return render_template('newCollectionItem.html', collection=collection)
         #return 'This page is for making a new menu item for collection %s' % collection_id
 
 
@@ -274,6 +282,8 @@ def newCollectionItem(collection_id):
 @app.route('/collection/<int:collection_id>/items/<int:item_id>/edit',
            methods=['GET', 'POST'])
 def editCollectionItem(collection_id, item_id):
+    if 'username' not in login_session:
+        return redirect('/login')
     editedCollectionItem = session.query(CollectionItem).filter_by(id=item_id).one()
     if request.method == 'POST':
         if request.form['name']:
@@ -299,6 +309,8 @@ def editCollectionItem(collection_id, item_id):
 @app.route('/collection/<int:collection_id>/items/<int:item_id>/delete',
            methods=['GET', 'POST'])
 def deleteCollectionItem(collection_id, item_id):
+    if 'username' not in login_session:
+        return redirect('/login')
     itemToDelete = session.query(CollectionItem).filter_by(id=item_id).one()
     if request.method == 'POST':
         session.delete(itemToDelete)
