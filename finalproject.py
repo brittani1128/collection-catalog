@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from dbsetup import Base, Collection, CollectionItem
+from dbsetup import Base, Collection, CollectionItem, User
 
 # Imports for login step
 from flask import session as login_session
@@ -25,7 +25,7 @@ CLIENT_ID = json.loads(
 APPLICATION_NAME = "Item Catalog Application"
 
 # Connect to Database and create database session
-engine = create_engine('sqlite:///collectioncatalog.db')
+engine = create_engine('sqlite:///collectioncatalogwithusers.db')
 Base.metadata.bind = engine
 
 DBSession = sessionmaker(bind=engine)
@@ -118,6 +118,12 @@ def gconnect():
     login_session['picture'] = data['picture']
     login_session['email'] = data['email']
 
+    # See if a user exists, if it doesn't make a new one
+    user_id = getUserID(login_session['email'])
+    if not user_id:
+        user_id = createUser(login_session)
+    login_session['user_id'] = user_id
+
     output = ''
     output += '<h1>Welcome, '
     output += login_session['username']
@@ -133,9 +139,35 @@ def gconnect():
     print "done!"
     return output
 
+
+# User Helper Functions
+
+def createUser(login_session):
+    newUser = User(name=login_session['username'], email=login_session[
+                   'email'], picture=login_session['picture'])
+    session.add(newUser)
+    session.commit()
+    user = session.query(User).filter_by(email=login_session['email']).one()
+    return user.id
+
+
+def getUserInfo(user_id):
+    user = session.query(User).filter_by(id=user_id).one()
+    return user
+
+
+def getUserID(email):
+    try:
+        user = session.query(User).filter_by(email=email).one()
+        return user.id
+    except:
+        return None
+
+
  # DISCONNECT - Revoke a current user's token and reset their login_session
 @app.route('/gdisconnect')
 def gdisconnect():
+    # Only disconnect a connected user
     access_token = login_session.get('access_token')
     if access_token is None:
         print 'Access Token is None'
@@ -201,8 +233,10 @@ def newCollection():
     if 'username' not in login_session:
         return redirect('/login')
     if request.method == 'POST':
-        newCollection = Collection(name=request.form['name'])
+        newCollection = Collection(
+            name=request.form['name'], user_id=login_session['user_id'])
         session.add(newCollection)
+        flash('New Collection %s Successfully Created' % newCollection.name)
         session.commit()
         return redirect(url_for('showCollections'))
     else:
@@ -213,13 +247,16 @@ def newCollection():
 # Edit a collection
 @app.route('/collection/<int:collection_id>/edit/', methods=['GET', 'POST'])
 def editCollection(collection_id):
-    if 'username' not in login_session:
-        return redirect('/login')
     editedCollection = session.query(
         Collection).filter_by(id=collection_id).one()
+    if 'username' not in login_session:
+        return redirect('/login')
+    if editedCollection.user_id != login_session['user_id']:
+        return "<script>function myFunction() {alert('You are not authorized to edit this collection. Please create your own collection in order to edit.');}</script><body onload='myFunction()''>"
     if request.method == 'POST':
         if request.form['name']:
             editedCollection.name = request.form['name']
+            flash('Collection Successfully Edited %s' % editedCollection.name)
             return redirect(url_for('showCollections'))
     else:
         return render_template('editCollection.html',
@@ -249,7 +286,8 @@ def deleteCollection(collection_id):
 @app.route('/collection/<int:collection_id>/')
 @app.route('/collection/<int:collection_id>/items/')
 def showItems(collection_id):
-    collection = session.query(Collection).filter_by(id=collection_id).one()
+    collection = session.query(Collection).filter_by(id=collection_id)
+    creator = getUserInfo(collection.user_id)
     items = session.query(CollectionItem).filter_by(
         collection_id=collection_id).all()
     return render_template('collectionItems.html',
@@ -263,12 +301,16 @@ def showItems(collection_id):
 def newCollectionItem(collection_id):
     if 'username' not in login_session:
         return redirect('/login')
+    collection = session.query(Collection).filter_by(id=collection_id).one()
+    if login_session['user_id'] != collection.user_id:
+        return "<script>function myFunction() {alert('You are not authorized to add menu items to this collection. Please create your own collection in order to add items.');}</script><body onload='myFunction()''>"
     if request.method == 'POST':
         newItem = CollectionItem(name=request.form['name'],
                                 description=request.form['description'],
                                 price=request.form['price'],
                                 category=request.form['category'],
-                                collection_id=collection_id)
+                                collection_id=collection_id,
+                                user_id=collection.user_id)
         session.add(newItem)
         session.commit()
 
@@ -311,10 +353,12 @@ def editCollectionItem(collection_id, item_id):
 def deleteCollectionItem(collection_id, item_id):
     if 'username' not in login_session:
         return redirect('/login')
+    collection = session.query(Collection).filter_by(id=collection_id).one()
     itemToDelete = session.query(CollectionItem).filter_by(id=item_id).one()
     if request.method == 'POST':
         session.delete(itemToDelete)
         session.commit()
+        flash('Collection Item Successfully Deleted')
         return redirect(url_for('showItems', collection_id=collection_id))
     else:
         return render_template('deleteCollectionItem.html', item=itemToDelete)
