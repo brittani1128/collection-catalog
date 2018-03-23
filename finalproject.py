@@ -35,6 +35,7 @@ session = DBSession()
 # set the secret key.  keep this really secret:
 app.secret_key = 'A0Zr98j/3yX R~XHH!jmN]LWX/,?RT'
 
+#---------------------
 
 # Create anti-forgery state token
 @app.route('/login')
@@ -45,6 +46,7 @@ def showLogin():
     # Render the login template
     return render_template('login.html', STATE=state)
 
+#---------------------
 
 @app.route('/gconnect', methods=['POST'])
 def gconnect():
@@ -141,7 +143,6 @@ def gconnect():
 
 
 # User Helper Functions
-
 def createUser(login_session):
     newUser = User(name=login_session['username'], email=login_session[
                    'email'], picture=login_session['picture'])
@@ -196,6 +197,7 @@ def gdisconnect():
         response.headers['Content-Type'] = 'application/json'
         return response
 
+#---------------------
 
 # JSON APIs to view Collection Information
 @app.route('/collection/JSON')
@@ -217,14 +219,18 @@ def collectionItemJSON(collection_id, item_id):
     Collection_Item = session.query(Item).filter_by(id=item_id).one()
     return jsonify(Collection_Item=Collection_Item.serialize)
 
+#---------------------
 
 # Show all collections
 @app.route('/')
 @app.route('/collection/')
 def showCollections():
     collections = session.query(Collection).all()
-    #return "This page will show all my collections"
-    return render_template('collections.html', collections=collections)
+    if 'username' not in login_session:
+        return render_template('publiccollections.html', collections=collections)
+    else:
+        return render_template('collections.html', collections=collections)
+        #return "This page will show all my collections"
 
 
 # Create a new collection
@@ -286,11 +292,14 @@ def deleteCollection(collection_id):
 @app.route('/collection/<int:collection_id>/')
 @app.route('/collection/<int:collection_id>/items/')
 def showItems(collection_id):
-    collection = session.query(Collection).filter_by(id=collection_id)
+    collection = session.query(Collection).filter_by(id=collection_id).one()
     creator = getUserInfo(collection.user_id)
     items = session.query(CollectionItem).filter_by(
         collection_id=collection_id).all()
-    return render_template('collectionItems.html',
+    if 'username' not in login_session or creator.id != login_session['user_id']:
+        return render_template('publicitems.html', items=items, collection=collection, creator=creator)
+    else:
+        return render_template('collectionItems.html',
                             items=items, collection=collection)
     #return 'This page is the list of items for collection %s' % collection_id
 
