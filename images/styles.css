@@ -1,0 +1,107 @@
+
+Beautified CSS:
+body {
+	background-color: #f1eded;
+}
+
+div {
+	box-sizing: border-box;
+}
+
+h1 {
+	font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font-size: 40px;
+	font-style: normal;
+	font-variant: normal;
+	font-weight: 300;
+	line-height: 40px;
+	text-transform: uppercase;
+	letter-spacing: 10px;
+	color: #2f7698;
+	/*border-bottom: 2px solid #eee;    adds line under header*/
+}
+
+h2 {
+	font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font-size: 1.75em;
+	font-style: normal;
+	font-variant: normal;
+	font-weight: 400;
+	line-height: 15.4px;
+	text-transform: uppercase;
+	letter-spacing: 5px;
+	color: #676767;
+}
+
+p {
+	font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+	font-size: 1.5em;
+	font-style: normal;
+	font-variant: normal;
+	font-weight: 350;
+	letter-spacing: 3px;
+	color: #505050;
+}
+
+a {
+	text-decoration: none;
+	color: #505050;
+	font-size: 1.0em;
+	font-weight: 400;
+}
+
+.new {
+	font-size: 1.2em;
+	text-transform: uppercase;
+	letter-spacing: 2px;
+}
+
+.inner-container {
+	margin: auto;
+	width: 90%;
+	padding: 10px;
+	text-align: center;
+}
+
+#name {
+	text-align: left;
+}
+
+#modify {
+	text-align: right;
+}
+
+.row-flex {
+	display: flex;
+	flex-direction: row;
+}
+
+.col-xs-4,
+.col-md-4 {
+	flex: 1;
+	text-align: right;
+}
+
+#main_img {
+	opacity: 0.85;
+}
+
+#items {
+	width: auto;
+	height: auto;
+	opacity: 1.0;
+}
+
+#collections {
+	text-align: center;
+}
+
+.img-responsive {
+	margin: auto;
+	max-width: 80%;
+}
+
+.details.row {
+	max-width: 80%;
+	margin: auto;
+}
